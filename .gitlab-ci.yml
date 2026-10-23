@@ -14,38 +14,47 @@ build_and_push:
   before_script:
     - docker version
   script:
-    # 1. Suppression de tout ancien builder résiduel
+    # 1. Nettoyage de tout ancien builder résiduel sur l'hôte
+    - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
     - docker buildx rm hermes-builder 2>/dev/null || true
 
-    # 2. Préparation du fichier buildkitd.toml
-    #    On utilise le bundle complet (Intermediate CA + Root CA) pour valider la chaîne TLS
-    # 2. Préparation du fichier buildkitd.toml avec le certificat CA
+    # 2. Détection dynamique du réseau Docker du runner (portabilité en entreprise)
+    - |
+      CONTAINER_ID=$(grep -oE "[0-9a-f]{64}" /proc/self/mountinfo | head -n 1)
+      [ -z "$CONTAINER_ID" ] && CONTAINER_ID=$(hostname)
+      NETWORK_NAME=$(docker inspect "$CONTAINER_ID" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null | awk '{print $1}')
+      NETWORK_OPT=""
+      if [ -n "$NETWORK_NAME" ] && [ "$NETWORK_NAME" != "bridge" ]; then
+        echo "🌐 Réseau Docker détecté : $NETWORK_NAME"
+        NETWORK_OPT="--driver-opt network=${NETWORK_NAME}"
+      else
+        echo "🌐 Réseau par défaut (bridge/standard)"
+      fi
+
+    # 3. Préparation du fichier buildkitd.toml avec le certificat CA
     - |
       mkdir -p /tmp/buildkit
       cat "$CA_CERTIFICATE" > /tmp/buildkit/ca.crt
-      # Si une variable d'intermediate est fournie ou déjà dans le fichier, buildkit valide la chaîne complète
       cat <<EOF > /tmp/buildkit/buildkitd.toml
       [registry."${REGISTRY_HOST}"]
         ca = ["/tmp/buildkit/ca.crt"]
       EOF
 
-    # 3. Création et démarrage du custom builder officiel avec le driver docker-container
-    # 3. Création du custom builder officiel rattaché au réseau hermes-net
+    # 4. Création et démarrage du custom builder officiel avec le driver docker-container
     - |
       docker buildx create \
         --name hermes-builder \
         --driver docker-container \
         --driver-opt image=registry.hermes.lan/moby/buildkit:buildx-stable-1 \
-        --driver-opt network=hermes-net \
+        $NETWORK_OPT \
         --buildkitd-config /tmp/buildkit/buildkitd.toml \
         --use \
         --bootstrap
 
-    # 4. Build et Push via le custom builder
-    # 4. Authentification Docker au registre (Buildx hérite des identifiants créés dans la session courante)
+    # 5. Authentification Docker au registre (Buildx hérite des identifiants créés dans la session courante)
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
 
-    # 5. Build et Push via le custom builder
+    # 6. Build et Push via le custom builder
     - |
       docker buildx build \
         --builder hermes-builder \
@@ -57,6 +66,10 @@ build_and_push:
         --push \
         .
     - echo "🎉 Image déployée avec succès sur https://${REGISTRY_HOST}"
+
+  after_script:
+    - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
+    - docker buildx rm hermes-builder 2>/dev/null || true
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
