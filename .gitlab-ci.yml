@@ -7,66 +7,32 @@ variables:
   IMAGE_NAME: "hermes-api"
   # Active Docker BuildKit pour le support des --secret
   DOCKER_BUILDKIT: "1"
-  # Communication TLS sécurisée standard entre docker:cli et le service dind
-  DOCKER_TLS_CERTDIR: "/certs"
-  DOCKER_HOST: "tcp://docker:2376"
-  DOCKER_TLS_VERIFY: "1"
-  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
 
 build_and_push:
   stage: build
   image: registry.hermes.lan/docker:27-cli
-  services:
-    - name: registry.hermes.lan/docker:27-dind
-      alias: docker
-      variables:
-        CA_CERT_TEXT: $CA_CERT_TEXT
-      command:
-        - /bin/sh
-        - -c
-        - |
-          if [ -n "$CA_CERT_TEXT" ]; then
-            echo "$CA_CERT_TEXT" > /usr/local/share/ca-certificates/hermes-root-ca.crt
-            update-ca-certificates
-          fi
-          exec dockerd-entrypoint.sh
   before_script:
-    - |
-      for i in $(seq 1 30); do
-        docker info > /dev/null 2>&1 && break
-        echo "En attente du démon Docker ($i/30)..."
-        sleep 1
-      done
-    # 1. Injection du certificat CA racine dans le client (pour le build Docker BuildKit)
-    - |
-      if [ -n "$CA_CERT_TEXT" ]; then
-        echo "🔒 Configuration du certificat CA racine dans le conteneur client..."
-        echo "$CA_CERT_TEXT" > /tmp/ca.crt
-        echo "$CA_CERT_TEXT" > /usr/local/share/ca-certificates/hermes-root-ca.crt
-        update-ca-certificates > /dev/null 2>&1 || true
-      fi
-
-    # 2. Authentification au Docker Registry hermes.lan
+    - docker version
+    # Authentification au Docker Registry hermes.lan
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
 
   script:
-    # 3. Construction de l'image de production avec Docker BuildKit Secrets
-    #    - ca_cert : passé depuis /tmp/ca.crt généré à partir de $CA_CERT_TEXT
-    #    - gitlab_token : passé en mémoire depuis la variable native $CI_JOB_TOKEN
+    # Construction de l'image de production avec Docker BuildKit Secrets :
+    # - ca_cert : passé depuis la variable File $CA_CERTIFICATE
+    # - gitlab_token : passé en mémoire depuis la variable native $CI_JOB_TOKEN
     - |
       docker build \
-        --secret id=ca_cert,src=/tmp/ca.crt \
+        --secret id=ca_cert,src="$CA_CERTIFICATE" \
         --secret id=gitlab_token,env=CI_JOB_TOKEN \
         -f Dockerfile.prod \
         -t "${REGISTRY_HOST}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}" \
         -t "${REGISTRY_HOST}/${IMAGE_NAME}:latest" \
         .
 
-    # 4. Push des images tagguées dans le registre
+    # Push des images tagguées dans le registre
     - docker push "${REGISTRY_HOST}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
     - docker push "${REGISTRY_HOST}/${IMAGE_NAME}:latest"
     - echo "🎉 Image déployée avec succès sur https://${REGISTRY_HOST}"
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-
