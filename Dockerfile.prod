@@ -5,7 +5,7 @@
 #   - ca_cert      : certificat racine de l'autorité interne
 #   - gitlab_token : token d'accès GitLab pour cloner la dépendance
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS builder
+FROM registry.hermes.lan/python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -45,7 +45,7 @@ RUN --mount=type=secret,id=ca_cert,required=false \
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage Final Runtime (sans git ni outils de build, très léger)
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS runner
+FROM registry.hermes.lan/python:3.12-slim AS runner
 
 WORKDIR /app
 
