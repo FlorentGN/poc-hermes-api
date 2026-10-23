@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.dev — Environnement de développement avec hot-reload & volumes
+# ─────────────────────────────────────────────────────────────────────────────
+FROM python:3.12-slim
+
+WORKDIR /workspace
+
+# Outils de dev essentiels
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Script de démarrage pour installer en mode éditable (-e) au lancement
+# si les dossiers sont montés, puis démarrer uvicorn avec --reload
+COPY entrypoint.dev.sh /entrypoint.dev.sh
+RUN chmod +x /entrypoint.dev.sh
+
+EXPOSE 8000
+
+ENTRYPOINT ["/entrypoint.dev.sh"]
+

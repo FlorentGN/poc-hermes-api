@@ -1,0 +1,57 @@
+stages:
+  - build
+
+variables:
+  # Image de registre cible
+  REGISTRY_HOST: "registry.hermes.lan"
+  IMAGE_NAME: "hermes-api"
+  # Active Docker BuildKit pour le support des --secret
+  DOCKER_BUILDKIT: "1"
+
+build_and_push:
+  stage: build
+  image: docker:27-cli
+  # services:
+  #   - name: docker:27-dind
+      # command: ["--insecure-registry=registry.hermes.lan"]
+  before_script:
+    - docker version
+    # 1. Prise en compte du certificat racine CA_CERTIFICATE (Variable CI de type File)
+    #    pour que Docker et le runner fassent confiance au registry et à step-ca
+    # - |
+    #   if [ -n "$CA_CERTIFICATE" ] && [ -f "$CA_CERTIFICATE" ]; then
+    #     echo "🔒 Installation du certificat CA racine fourni par GitLab CI..."
+    #     cp "$CA_CERTIFICATE" /usr/local/share/ca-certificates/hermes-root-ca.crt
+    #     update-ca-certificates
+    #     # Pour Docker client (push/pull sécurisé sans warning)
+    #     mkdir -p /etc/docker/certs.d/${REGISTRY_HOST}
+    #     cp "$CA_CERTIFICATE" /etc/docker/certs.d/${REGISTRY_HOST}/ca.crt
+    #   else
+    #     echo "⚠️  Variable CA_CERTIFICATE non définie ou fichier introuvable."
+    #   fi
+
+    # 2. Authentification au Docker Registry hermes.lan
+    #    (Utilise les credentials REGISTRY_USER et REGISTRY_PASSWORD définis dans les variables CI de GitLab)
+    - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
+
+  script:
+    # 3. Construction de l'image de production avec Docker BuildKit Secrets
+    #    - ca_cert : passé depuis la variable File $CA_CERTIFICATE
+    #    - gitlab_token : passé en mémoire depuis la variable native $CI_JOB_TOKEN
+    - |
+      docker build \
+        --secret id=ca_cert,src="$CA_CERTIFICATE" \
+        --secret id=gitlab_token,env=CI_JOB_TOKEN \
+        -f Dockerfile.prod \
+        -t "${REGISTRY_HOST}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}" \
+        -t "${REGISTRY_HOST}/${IMAGE_NAME}:latest" \
+        .
+
+    # 4. Push des images tagguées dans le registre
+    - docker push "${REGISTRY_HOST}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+    - docker push "${REGISTRY_HOST}/${IMAGE_NAME}:latest"
+    - echo "🎉 Image déployée avec succès sur https://${REGISTRY_HOST}"
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
