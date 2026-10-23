@@ -33,13 +33,13 @@ build_and_push:
     #   fi
 
     # 3. Préparation du fichier buildkitd.toml avec le certificat CA
-    - |
-      mkdir -p /tmp/buildkit
-      cat "$CA_CERTIFICATE" > /tmp/buildkit/ca.crt
-      cat <<EOF > /tmp/buildkit/buildkitd.toml
-      [registry."${REGISTRY_HOST}"]
-        ca = ["/tmp/buildkit/ca.crt"]
-      EOF
+    # - |
+    #   mkdir -p /tmp/buildkit
+    #   cat "$CA_CERTIFICATE" > /tmp/buildkit/ca.crt
+    #   cat <<EOF > /tmp/buildkit/buildkitd.toml
+    #   [registry."${REGISTRY_HOST}"]
+    #     ca = ["/tmp/buildkit/ca.crt"]
+    #   EOF
 
     # 4. Création et démarrage du custom builder officiel avec le driver docker-container
     - |
@@ -47,7 +47,7 @@ build_and_push:
         --name hermes-builder \
         --driver docker-container \
         --driver-opt image=registry.hermes.lan/moby/buildkit:buildx-stable-1 \
-        --buildkitd-config /tmp/buildkit/buildkitd.toml \
+        --driver-opt network=host \
         --use \
         --bootstrap
     # - |
