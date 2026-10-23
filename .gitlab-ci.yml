@@ -17,21 +17,42 @@ build_and_push:
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
 
   script:
-    # Construction de l'image de production avec Docker BuildKit Secrets :
-    # - ca_cert : passé depuis la variable File $CA_CERTIFICATE
-    # - gitlab_token : passé en mémoire depuis la variable native $CI_JOB_TOKEN
+    # 1. Préparation de la configuration buildkitd pour faire confiance au CA racine interne
+    # - |
+    #   mkdir -p /tmp/buildkit
+    #   cat <<EOF > /tmp/buildkit/buildkitd.toml
+    #   [registry."${REGISTRY_HOST}"]
+    #     ca = ["$CA_CERTIFICATE"]
+    #   EOF
+
+    # 2. Création et démarrage du custom builder avec le driver docker-container
+    # - |
+    #   docker buildx create \
+    #     --name hermes-builder \
+    #     --driver docker-container \
+    #     --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
+    #     --driver-opt network=host \
+    #     --buildkitd-config /tmp/buildkit/buildkitd.toml \
+    #     --use
     - |
-      docker build \
+      docker buildx create \
+        --name hermes-builder \
+        --driver docker-container \
+        --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
+        --driver-opt network=host \
+        --use
+    - docker buildx inspect --bootstrap
+
+    # 3. Build et Push via le custom builder
+    - |
+      docker buildx build \
         --secret id=ca_cert,src="$CA_CERTIFICATE" \
         --secret id=gitlab_token,env=CI_JOB_TOKEN \
-        -f Dockerfile.prod \
-        -t "${REGISTRY_HOST}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}" \
-        -t "${REGISTRY_HOST}/${IMAGE_NAME}:latest" \
+        --file Dockerfile.prod \
+        --tag "${REGISTRY_HOST}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}" \
+        --tag "${REGISTRY_HOST}/${IMAGE_NAME}:latest" \
+        --push \
         .
-
-    # Push des images tagguées dans le registre
-    - docker push "${REGISTRY_HOST}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
-    - docker push "${REGISTRY_HOST}/${IMAGE_NAME}:latest"
     - echo "🎉 Image déployée avec succès sur https://${REGISTRY_HOST}"
 
   rules:
