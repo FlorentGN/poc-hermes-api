@@ -10,7 +10,7 @@ variables:
 
 build_and_push:
   stage: build
-  image: docker:27-cli
+  image: registry.hermes.lan/docker:27-cli
   # services:
   #   - name: docker:27-dind
       # command: ["--insecure-registry=registry.hermes.lan"]
