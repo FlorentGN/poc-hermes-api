@@ -45,6 +45,7 @@ build_and_push:
     # 4. Build et Push via le custom builder
     - |
       docker buildx build \
+        --builder hermes-builder \
         --secret id=ca_cert,src="$CA_CERTIFICATE" \
         --secret id=gitlab_token,env=CI_JOB_TOKEN \
         --file Dockerfile.prod \
