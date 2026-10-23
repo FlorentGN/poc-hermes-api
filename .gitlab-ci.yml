@@ -15,24 +15,8 @@ build_and_push:
     - docker version
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
   script:
-    # 1. Nettoyage de tout ancien builder résiduel sur l'hôte
     - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
     - docker buildx rm hermes-builder 2>/dev/null || true
-
-    # 2. Détection dynamique du réseau Docker du runner (portabilité en entreprise)
-    # - |
-    #   CONTAINER_ID=$(grep -m 1 -oE "[0-9a-f]{64}" /proc/self/mountinfo || true)
-    #   [ -z "$CONTAINER_ID" ] && CONTAINER_ID=$(hostname)
-    #   NETWORK_NAME=$(docker inspect "$CONTAINER_ID" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{break}}{{end}}' 2>/dev/null || true)
-    #   NETWORK_OPT=""
-    #   if [ -n "$NETWORK_NAME" ] && [ "$NETWORK_NAME" != "bridge" ] && [ "$NETWORK_NAME" != "host" ]; then
-    #     echo "🌐 Réseau Docker détecté : $NETWORK_NAME"
-    #     NETWORK_OPT="--driver-opt network=${NETWORK_NAME}"
-    #   else
-    #     echo "🌐 Réseau standard / par défaut"
-    #   fi
-
-    # 3. Préparation du fichier buildkitd.toml avec le certificat CA
     - |
       mkdir -p /tmp/buildkit
       cat "$CA_CERTIFICATE" > /tmp/buildkit/ca.crt
@@ -40,28 +24,13 @@ build_and_push:
       [registry."${REGISTRY_HOST}"]
         ca = ["/tmp/buildkit/ca.crt"]
       EOF
-
-    # 4. Création et démarrage du custom builder officiel avec le driver docker-container
     - |
       docker buildx create \
         --name hermes-builder \
         --driver docker-container \
         --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
-        --driver-opt network=host \
-        --buildkitd-config /tmp/buildkit/buildkitd.toml \
         --use \
         --bootstrap
-    # - |
-    #   docker buildx create \
-    #     --name hermes-builder \
-    #     --driver docker-container \
-    #     --driver-opt image=registry.hermes.lan/moby/buildkit:buildx-stable-1 \
-    #     $NETWORK_OPT \
-    #     --buildkitd-config /tmp/buildkit/buildkitd.toml \
-    #     --use \
-    #     --bootstrap
-
-    # 5. Build et Push via le custom builder
     - |
       docker buildx build \
         --builder hermes-builder \
