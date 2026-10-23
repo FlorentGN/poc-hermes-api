@@ -18,17 +18,17 @@ build_and_push:
       alias: docker
   before_script:
     # 1. Injection du certificat CA racine dans le démon Docker (dind) et le client
-    # - |
-    #   if [ -n "$CA_CERTIFICATE" ] && [ -f "$CA_CERTIFICATE" ]; then
-    #     echo "🔒 Configuration du certificat CA racine dans le client et le démon dind..."
-    #     cp "$CA_CERTIFICATE" /usr/local/share/ca-certificates/hermes-root-ca.crt
-    #     update-ca-certificates > /dev/null 2>&1 || true
-    #     # Répertoire officiel reconnu par le démon Docker pour valider registry.hermes.lan
-    #     mkdir -p /etc/docker/certs.d/${REGISTRY_HOST}
-    #     cp "$CA_CERTIFICATE" /etc/docker/certs.d/${REGISTRY_HOST}/ca.crt
-    #   else
-    #     echo "⚠️  Variable CA_CERTIFICATE non définie ou fichier introuvable."
-    #   fi
+    - |
+      if [ -n "$CA_CERTIFICATE" ] && [ -f "$CA_CERTIFICATE" ]; then
+        echo "🔒 Configuration du certificat CA racine dans le client et le démon dind..."
+        cp "$CA_CERTIFICATE" /usr/local/share/ca-certificates/hermes-root-ca.crt
+        update-ca-certificates > /dev/null 2>&1 || true
+        # Répertoire officiel reconnu par le démon Docker pour valider registry.hermes.lan
+        mkdir -p /etc/docker/certs.d/${REGISTRY_HOST}
+        cp "$CA_CERTIFICATE" /etc/docker/certs.d/${REGISTRY_HOST}/ca.crt
+      else
+        echo "⚠️  Variable CA_CERTIFICATE non définie ou fichier introuvable."
+      fi
 
     # 2. Authentification au Docker Registry hermes.lan
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
