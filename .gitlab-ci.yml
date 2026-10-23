@@ -17,15 +17,20 @@ build_and_push:
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
 
   script:
-    # 1. Préparation de la configuration buildkitd pour faire confiance au CA racine interne
+    # 1. Suppression de tout ancien builder résiduel
+    - docker buildx rm hermes-builder 2>/dev/null || true
+
+    # 2. Préparation du fichier buildkitd.toml
+    #    Buildx copie automatiquement le fichier CA référencé dans le conteneur BuildKit
     - |
       mkdir -p /tmp/buildkit
+      cp "$CA_CERTIFICATE" /tmp/buildkit/ca.crt
       cat <<EOF > /tmp/buildkit/buildkitd.toml
       [registry."${REGISTRY_HOST}"]
-        ca = ["$CA_CERTIFICATE"]
+        ca = ["/tmp/buildkit/ca.crt"]
       EOF
 
-    # 2. Création et démarrage du custom builder avec le driver docker-container
+    # 3. Création et démarrage du custom builder officiel avec le driver docker-container
     - |
       docker buildx create \
         --name hermes-builder \
@@ -33,17 +38,10 @@ build_and_push:
         --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
         --driver-opt network=host \
         --buildkitd-config /tmp/buildkit/buildkitd.toml \
-        --use
-    # - |
-    #   docker buildx create \
-    #     --name hermes-builder \
-    #     --driver docker-container \
-    #     --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
-    #     --driver-opt network=host \
-    #     --use
-    - docker buildx inspect --bootstrap
+        --use \
+        --bootstrap
 
-    # 3. Build et Push via le custom builder
+    # 4. Build et Push via le custom builder
     - |
       docker buildx build \
         --secret id=ca_cert,src="$CA_CERTIFICATE" \
