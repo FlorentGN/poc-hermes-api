@@ -9,6 +9,9 @@ variables:
   DOCKER_BUILDKIT: "1"
   # Communication TLS sécurisée standard entre docker:cli et le service dind
   DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_HOST: "tcp://docker:2376"
+  DOCKER_TLS_VERIFY: "1"
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
 
 build_and_push:
   stage: build
@@ -16,18 +19,19 @@ build_and_push:
   services:
     - name: registry.hermes.lan/docker:27-dind
       alias: docker
-      # Partage déjà le volume /certs/client avec le job pour TLS.
-      # On place le certificat de registry.hermes.lan directement dans ce volume partagé !
-      command: ["--cert-path=/certs/client"]
   before_script:
-    # 1. Injection du certificat CA racine dans le volume partagé /certs/client
-    #    Ce volume (/certs/client) existe DÉJÀ par défaut dans GitLab Runner pour DinD !
+    - |
+      for i in $(seq 1 30); do
+        docker info > /dev/null 2>&1 && break
+        echo "En attente du démon Docker ($i/30)..."
+        sleep 1
+      done
+    # 1. Injection du certificat CA racine dans le trust store
     - |
       if [ -n "$CA_CERTIFICATE" ] && [ -f "$CA_CERTIFICATE" ]; then
         echo "🔒 Configuration du certificat CA racine dans /certs/client/ca.pem..."
         cp "$CA_CERTIFICATE" /usr/local/share/ca-certificates/hermes-root-ca.crt
         update-ca-certificates > /dev/null 2>&1 || true
-        # /certs/client/ca.pem est lu par le démon Docker dind
         cat "$CA_CERTIFICATE" >> /certs/client/ca.pem
       else
         echo "⚠️  Variable CA_CERTIFICATE non définie ou fichier introuvable."
