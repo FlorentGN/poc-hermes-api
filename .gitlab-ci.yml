@@ -7,23 +7,23 @@ variables:
   IMAGE_NAME: "hermes-api"
   # Active Docker BuildKit pour le support des --secret
   DOCKER_BUILDKIT: "1"
+  # Communication TLS sécurisée standard entre docker:cli et le service dind
+  DOCKER_TLS_CERTDIR: "/certs"
 
 build_and_push:
   stage: build
   image: registry.hermes.lan/docker:27-cli
-  # services:
-  #   - name: docker:27-dind
-      # command: ["--insecure-registry=registry.hermes.lan"]
+  services:
+    - name: registry.hermes.lan/docker:27-dind
+      alias: docker
   before_script:
-    - docker version
-    # 1. Prise en compte du certificat racine CA_CERTIFICATE (Variable CI de type File)
-    #    pour que Docker et le runner fassent confiance au registry et à step-ca
+    # 1. Injection du certificat CA racine dans le démon Docker (dind) et le client
     # - |
     #   if [ -n "$CA_CERTIFICATE" ] && [ -f "$CA_CERTIFICATE" ]; then
-    #     echo "🔒 Installation du certificat CA racine fourni par GitLab CI..."
+    #     echo "🔒 Configuration du certificat CA racine dans le client et le démon dind..."
     #     cp "$CA_CERTIFICATE" /usr/local/share/ca-certificates/hermes-root-ca.crt
-    #     update-ca-certificates
-    #     # Pour Docker client (push/pull sécurisé sans warning)
+    #     update-ca-certificates > /dev/null 2>&1 || true
+    #     # Répertoire officiel reconnu par le démon Docker pour valider registry.hermes.lan
     #     mkdir -p /etc/docker/certs.d/${REGISTRY_HOST}
     #     cp "$CA_CERTIFICATE" /etc/docker/certs.d/${REGISTRY_HOST}/ca.crt
     #   else
@@ -31,7 +31,6 @@ build_and_push:
     #   fi
 
     # 2. Authentification au Docker Registry hermes.lan
-    #    (Utilise les credentials REGISTRY_USER et REGISTRY_PASSWORD définis dans les variables CI de GitLab)
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
 
   script:
