@@ -16,16 +16,19 @@ build_and_push:
   services:
     - name: registry.hermes.lan/docker:27-dind
       alias: docker
+      # Partage déjà le volume /certs/client avec le job pour TLS.
+      # On place le certificat de registry.hermes.lan directement dans ce volume partagé !
+      command: ["--cert-path=/certs/client"]
   before_script:
-    # 1. Injection du certificat CA racine dans le démon Docker (dind) et le client
+    # 1. Injection du certificat CA racine dans le volume partagé /certs/client
+    #    Ce volume (/certs/client) existe DÉJÀ par défaut dans GitLab Runner pour DinD !
     - |
       if [ -n "$CA_CERTIFICATE" ] && [ -f "$CA_CERTIFICATE" ]; then
-        echo "🔒 Configuration du certificat CA racine dans le client et le démon dind..."
+        echo "🔒 Configuration du certificat CA racine dans /certs/client/ca.pem..."
         cp "$CA_CERTIFICATE" /usr/local/share/ca-certificates/hermes-root-ca.crt
         update-ca-certificates > /dev/null 2>&1 || true
-        # Répertoire officiel reconnu par le démon Docker pour valider registry.hermes.lan
-        mkdir -p /etc/docker/certs.d/${REGISTRY_HOST}
-        cp "$CA_CERTIFICATE" /etc/docker/certs.d/${REGISTRY_HOST}/ca.crt
+        # /certs/client/ca.pem est lu par le démon Docker dind
+        cat "$CA_CERTIFICATE" >> /certs/client/ca.pem
       else
         echo "⚠️  Variable CA_CERTIFICATE non définie ou fichier introuvable."
       fi
