@@ -13,7 +13,6 @@ build_and_push:
   image: registry.hermes.lan/docker:27-cli
   before_script:
     - docker version
-    - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
   script:
     # 1. Nettoyage de tout ancien builder résiduel sur l'hôte
     - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
@@ -47,8 +46,6 @@ build_and_push:
         --name hermes-builder \
         --driver docker-container \
         --driver-opt image=registry.hermes.lan/moby/buildkit:buildx-stable-1 \
-        --driver-opt network=host \
-        --buildkitd-config /tmp/buildkit/buildkitd.toml \
         --use \
         --bootstrap
     # - |
