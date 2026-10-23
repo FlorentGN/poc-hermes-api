@@ -19,12 +19,14 @@ build_and_push:
   services:
     - name: registry.hermes.lan/docker:27-dind
       alias: docker
+      variables:
+        CA_CERT_TEXT: $CA_CERT_TEXT
       command:
         - /bin/sh
         - -c
         - |
-          if [ -n "$CA_CERTIFICATE" ] && [ -f "$CA_CERTIFICATE" ]; then
-            cp "$CA_CERTIFICATE" /usr/local/share/ca-certificates/hermes-root-ca.crt
+          if [ -n "$CA_CERT_TEXT" ]; then
+            echo "$CA_CERT_TEXT" > /usr/local/share/ca-certificates/hermes-root-ca.crt
             update-ca-certificates
           fi
           exec dockerd-entrypoint.sh
@@ -35,15 +37,13 @@ build_and_push:
         echo "En attente du démon Docker ($i/30)..."
         sleep 1
       done
-    # 1. Injection du certificat CA racine dans le trust store
+    # 1. Injection du certificat CA racine dans le client (pour le build Docker BuildKit)
     - |
-      if [ -n "$CA_CERTIFICATE" ] && [ -f "$CA_CERTIFICATE" ]; then
-        echo "🔒 Configuration du certificat CA racine dans /certs/client/ca.pem..."
-        cp "$CA_CERTIFICATE" /usr/local/share/ca-certificates/hermes-root-ca.crt
+      if [ -n "$CA_CERT_TEXT" ]; then
+        echo "🔒 Configuration du certificat CA racine dans le conteneur client..."
+        echo "$CA_CERT_TEXT" > /tmp/ca.crt
+        echo "$CA_CERT_TEXT" > /usr/local/share/ca-certificates/hermes-root-ca.crt
         update-ca-certificates > /dev/null 2>&1 || true
-        cat "$CA_CERTIFICATE" >> /certs/client/ca.pem
-      else
-        echo "⚠️  Variable CA_CERTIFICATE non définie ou fichier introuvable."
       fi
 
     # 2. Authentification au Docker Registry hermes.lan
@@ -51,11 +51,11 @@ build_and_push:
 
   script:
     # 3. Construction de l'image de production avec Docker BuildKit Secrets
-    #    - ca_cert : passé depuis la variable File $CA_CERTIFICATE
+    #    - ca_cert : passé depuis /tmp/ca.crt généré à partir de $CA_CERT_TEXT
     #    - gitlab_token : passé en mémoire depuis la variable native $CI_JOB_TOKEN
     - |
       docker build \
-        --secret id=ca_cert,src="$CA_CERTIFICATE" \
+        --secret id=ca_cert,src=/tmp/ca.crt \
         --secret id=gitlab_token,env=CI_JOB_TOKEN \
         -f Dockerfile.prod \
         -t "${REGISTRY_HOST}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}" \
