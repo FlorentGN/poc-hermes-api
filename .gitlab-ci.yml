@@ -21,10 +21,11 @@ build_and_push:
     - docker buildx rm hermes-builder 2>/dev/null || true
 
     # 2. Préparation du fichier buildkitd.toml
-    #    Buildx copie automatiquement le fichier CA référencé dans le conteneur BuildKit
+    #    On utilise le bundle complet (Intermediate CA + Root CA) pour valider la chaîne TLS
     - |
       mkdir -p /tmp/buildkit
-      cp "$CA_CERTIFICATE" /tmp/buildkit/ca.crt
+      cat "$CA_CERTIFICATE" > /tmp/buildkit/ca.crt
+      # Si une variable d'intermediate est fournie ou déjà dans le fichier, buildkit valide la chaîne complète
       cat <<EOF > /tmp/buildkit/buildkitd.toml
       [registry."${REGISTRY_HOST}"]
         ca = ["/tmp/buildkit/ca.crt"]
@@ -35,7 +36,7 @@ build_and_push:
       docker buildx create \
         --name hermes-builder \
         --driver docker-container \
-        --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
+        --driver-opt image=registry.hermes.lan/moby/buildkit:buildx-stable-1 \
         --driver-opt network=host \
         --buildkitd-config /tmp/buildkit/buildkitd.toml \
         --use \
