@@ -22,13 +22,13 @@ build_and_push:
 
     # 2. Préparation du fichier buildkitd.toml
     #    Buildx copie automatiquement le fichier CA référencé dans le conteneur BuildKit
-    - |
-      mkdir -p /tmp/buildkit
-      cp "$CA_CERTIFICATE" /tmp/buildkit/ca.crt
-      cat <<EOF > /tmp/buildkit/buildkitd.toml
-      [registry."${REGISTRY_HOST}"]
-        ca = ["/tmp/buildkit/ca.crt"]
-      EOF
+    # - |
+    #   mkdir -p /tmp/buildkit
+    #   cp "$CA_CERTIFICATE" /tmp/buildkit/ca.crt
+    #   cat <<EOF > /tmp/buildkit/buildkitd.toml
+    #   [registry."${REGISTRY_HOST}"]
+    #     ca = ["/tmp/buildkit/ca.crt"]
+    #   EOF
 
     # 3. Création et démarrage du custom builder officiel avec le driver docker-container
     - |
