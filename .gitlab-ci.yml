@@ -34,6 +34,7 @@ build_and_push:
         --bootstrap
     - |
       docker buildx build \
+        --driver-opt network=host \
         --secret id=ca_cert,src="$CA_CERTIFICATE" \
         --secret id=gitlab_token,env=CI_JOB_TOKEN \
         --file Dockerfile.prod \
