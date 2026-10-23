@@ -22,6 +22,7 @@ build_and_push:
 
     # 2. Préparation du fichier buildkitd.toml
     #    On utilise le bundle complet (Intermediate CA + Root CA) pour valider la chaîne TLS
+    # 2. Préparation du fichier buildkitd.toml avec le certificat CA
     - |
       mkdir -p /tmp/buildkit
       cat "$CA_CERTIFICATE" > /tmp/buildkit/ca.crt
@@ -32,17 +33,23 @@ build_and_push:
       EOF
 
     # 3. Création et démarrage du custom builder officiel avec le driver docker-container
+    # 3. Création du custom builder officiel rattaché au réseau hermes-net
     - |
       docker buildx create \
         --name hermes-builder \
         --driver docker-container \
         --driver-opt image=registry.hermes.lan/moby/buildkit:buildx-stable-1 \
         --driver-opt network=host \
+        --driver-opt network=hermes-net \
         --buildkitd-config /tmp/buildkit/buildkitd.toml \
         --use \
         --bootstrap
 
     # 4. Build et Push via le custom builder
+    # 4. Authentification Docker au registre (Buildx hérite des identifiants créés dans la session courante)
+    - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
+
+    # 5. Build et Push via le custom builder
     - |
       docker buildx build \
         --builder hermes-builder \
