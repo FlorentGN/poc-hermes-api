@@ -52,6 +52,7 @@ build_and_push:
         --name "builder-${CI_JOB_ID}" \
         --driver docker-container \
         --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
+        --buildkitd-config /tmp/buildkit/buildkitd.toml \
         --use \
         --bootstrap
 
