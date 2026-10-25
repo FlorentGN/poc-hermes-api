@@ -6,7 +6,7 @@ variables:
   REGISTRY_HOST: "registry.hermes.lan"
   IMAGE_NAME: "hermes-api"
   # Active Docker BuildKit pour le support des --secret
-  DOCKER_BUILDKIT: "1"
+  # DOCKER_BUILDKIT: "1"
 
 build_and_push:
   stage: build
@@ -15,8 +15,8 @@ build_and_push:
     - docker version
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
   script:
-    # - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
-    # - docker buildx rm hermes-builder 2>/dev/null || true
+    - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
+    - docker buildx rm hermes-builder 2>/dev/null || true
     - |
       mkdir -p /tmp/buildkit
       cat "$CA_CERTIFICATE" > /tmp/buildkit/ca.crt
@@ -44,9 +44,9 @@ build_and_push:
         .
     - echo "🎉 Image déployée avec succès sur https://${REGISTRY_HOST}"
 
-  # after_script:
-  #   - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
-  #   - docker buildx rm hermes-builder 2>/dev/null || true
+  after_script:
+    - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
+    - docker buildx rm hermes-builder 2>/dev/null || true
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
