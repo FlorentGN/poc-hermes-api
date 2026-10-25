@@ -15,8 +15,20 @@ build_and_push:
     - docker version
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
   script:
-    - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
-    - docker buildx rm hermes-builder 2>/dev/null || true
+    # 1. Détection dynamique du réseau Docker du runner (portabilité lab / entreprise)
+    - |
+      CONTAINER_ID=$(grep -m 1 -oE "[0-9a-f]{64}" /proc/self/mountinfo || true)
+      [ -z "$CONTAINER_ID" ] && CONTAINER_ID=$(hostname)
+      NETWORK_NAME=$(docker inspect "$CONTAINER_ID" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{break}}{{end}}' 2>/dev/null || true)
+      NETWORK_OPT=""
+      if [ -n "$NETWORK_NAME" ] && [ "$NETWORK_NAME" != "bridge" ] && [ "$NETWORK_NAME" != "host" ]; then
+        echo "🌐 Réseau Docker détecté : $NETWORK_NAME"
+        NETWORK_OPT="--driver-opt network=${NETWORK_NAME}"
+      else
+        echo "🌐 Réseau standard / par défaut"
+      fi
+
+    # 2. Préparation du fichier buildkitd.toml avec le certificat CA
     - |
       mkdir -p /tmp/buildkit
       cat "$CA_CERTIFICATE" > /tmp/buildkit/ca.crt
@@ -24,17 +36,30 @@ build_and_push:
       [registry."${REGISTRY_HOST}"]
         ca = ["/tmp/buildkit/ca.crt"]
       EOF
+
+    # 3. Création d'une instance Buildx unique dédiée à ce job CI
+    # - |
+    #   docker buildx create \
+    #     --name "builder-${CI_JOB_ID}" \
+    #     --driver docker-container \
+    #     --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
+    #     $NETWORK_OPT \
+    #     --buildkitd-config /tmp/buildkit/buildkitd.toml \
+    #     --use \
+    #     --bootstrap
     - |
       docker buildx create \
-        --name hermes-builder \
+        --name "builder-${CI_JOB_ID}" \
         --driver docker-container \
         --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
         --buildkitd-config /tmp/buildkit/buildkitd.toml \
         --use \
         --bootstrap
+
+    # 4. Build et Push via le custom builder
     - |
       docker buildx build \
-        --builder hermes-builder \
+        --builder "builder-${CI_JOB_ID}" \
         --secret id=ca_cert,src="$CA_CERTIFICATE" \
         --secret id=gitlab_token,env=CI_JOB_TOKEN \
         --file Dockerfile.prod \
@@ -45,8 +70,8 @@ build_and_push:
     - echo "🎉 Image déployée avec succès sur https://${REGISTRY_HOST}"
 
   after_script:
-    - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
-    - docker buildx rm hermes-builder 2>/dev/null || true
+    - docker buildx rm -f "builder-${CI_JOB_ID}" 2>/dev/null || true
+    - docker rm -f "buildx_buildkit_builder-${CI_JOB_ID}0" 2>/dev/null || true
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
