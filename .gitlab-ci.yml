@@ -6,7 +6,7 @@ variables:
   REGISTRY_HOST: "registry.hermes.lan"
   IMAGE_NAME: "hermes-api"
   # Active Docker BuildKit pour le support des --secret
-  # DOCKER_BUILDKIT: "1"
+  DOCKER_BUILDKIT: "1"
 
 build_and_push:
   stage: build
