@@ -15,8 +15,8 @@ build_and_push:
     - docker version
     - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
   script:
-    - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
-    - docker buildx rm hermes-builder 2>/dev/null || true
+    # - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
+    # - docker buildx rm hermes-builder 2>/dev/null || true
     - |
       mkdir -p /tmp/buildkit
       cat "$CA_CERTIFICATE" > /tmp/buildkit/ca.crt
@@ -29,7 +29,6 @@ build_and_push:
         --name hermes-builder \
         --driver docker-container \
         --driver-opt image=registry.hermes.lan/moby/buildkit:latest \
-        --buildkitd-config /tmp/buildkit/buildkitd.toml \
         --use \
         --bootstrap
     - |
@@ -44,9 +43,9 @@ build_and_push:
         .
     - echo "🎉 Image déployée avec succès sur https://${REGISTRY_HOST}"
 
-  after_script:
-    - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
-    - docker buildx rm hermes-builder 2>/dev/null || true
+  # after_script:
+  #   - docker rm -f buildx_buildkit_hermes-builder0 2>/dev/null || true
+  #   - docker buildx rm hermes-builder 2>/dev/null || true
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
